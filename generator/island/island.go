@@ -139,10 +139,16 @@ func (i *Island) GenerateBlock() {
 								}
 							}
 						}
+					} else {
+						i.Background[y][x] = generator.TEMPLATE_GROUND_RESSOURCES.Biomes[i.Background[y][x].Name].BaseImage
 					}
 				} else {
-
+					i.Background[y][x] = generator.TEMPLATE_GROUND_RESSOURCES.Biomes[i.Background[y][x].Name].BaseImage
 				}
+
+			} else {
+				i.Background[y][x] = generator.TEMPLATE_GROUND_RESSOURCES.Biomes[i.Background[y][x].Name].BaseImage
+
 			}
 		}
 	}

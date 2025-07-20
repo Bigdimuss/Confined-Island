@@ -1,10 +1,12 @@
 package generator
 
 import (
+	"confinedisland/config"
 	"confinedisland/sprite"
 	"fmt"
 	"image"
 	"image/color"
+	"sync"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
@@ -71,6 +73,7 @@ type Biome struct {
 	Oriented           bool
 	OrientationSprites map[string]*sprite.Block
 	Voisin             string
+	BaseImage          *sprite.Block
 }
 
 type Coord struct {
@@ -109,6 +112,23 @@ var TemplateGroundPosition map[string][]Coord = map[string][]Coord{
 		Coord{X: 2, Y: 6},
 	},
 }
+var StaticSpritePool = sync.Pool{
+	New: func() interface{} {
+		return &sprite.StaticSprite{}
+	},
+}
+
+var AnimatedSpritePool = sync.Pool{
+	New: func() interface{} {
+		return &sprite.AnimatedSprites{}
+	},
+}
+
+var BlockPool = sync.Pool{
+	New: func() interface{} {
+		return &sprite.Block{}
+	},
+}
 
 func (templateGround *Template_Ground) GenerateOrientation(templatePosition map[string][]Coord) {
 	img, _, err := ebitenutil.NewImageFromFile(templateGround.Chemin)
@@ -119,32 +139,55 @@ func (templateGround *Template_Ground) GenerateOrientation(templatePosition map[
 			if b.Oriented {
 				for k, tp := range templatePosition {
 					for _, coord := range tp {
-						block := &sprite.Block{
-							Name:        b.Name,
-							Orientation: k,
-						}
+						//block := BlockPool.Get().(*sprite.Block)
+						block := &sprite.Block{}
+						block.Name = b.Name
+						block.Orientation = k
+						block.Animated = false
 						if b.IterationNumber == 0 {
 							x := (b.StartX + coord.X) * UNITE
 							y := coord.Y * int(UNITE)
-							block.Sprite = &sprite.StaticSprite{Image: img.SubImage(image.Rect(x, y, x+int(UNITE), y+int(UNITE))).(*ebiten.Image)}
+							sprite := StaticSpritePool.Get().(*sprite.StaticSprite)
+							sprite.Image = img.SubImage(image.Rect(x, y, x+int(UNITE), y+int(UNITE))).(*ebiten.Image)
+							block.Sprite = sprite
 						} else {
 							var sprites []*sprite.StaticSprite
 							for i := 0; i < b.IterationNumber; i++ {
-								x := (b.StartX + coord.X + i) * UNITE
+								x := (b.StartX + coord.X) * UNITE
+								if i > 0 {
+									x += (UNITE * 3) * i
+								}
 								y := coord.Y * int(UNITE)
-								sprite := &sprite.StaticSprite{Image: img.SubImage(image.Rect(x, y, x+int(UNITE), y+int(UNITE))).(*ebiten.Image), Height: float64(UNITE), Width: float64(UNITE)}
+								sprite := StaticSpritePool.Get().(*sprite.StaticSprite)
+								sprite.Image = img.SubImage(image.Rect(x, y, x+int(UNITE), y+int(UNITE))).(*ebiten.Image)
 								sprites = append(sprites, sprite)
 
 							}
-							block.Sprite = &sprite.AnimatedSprites{Sprites: sprites, Type: b.AnimationType, Duration: b.AnimationDuration}
+							animated := AnimatedSpritePool.Get().(*sprite.AnimatedSprites)
+							animated.Sprites = sprites
+							animated.Type = b.AnimationType
+							animated.Duration = b.AnimationDuration
+							animated.Start()
+							block.Sprite = animated
+							block.Animated = true
 						}
 						templateGround.Biomes[v].OrientationSprites[k] = block
 
 					}
 				}
 			}
-
+			biome := templateGround.Biomes[v]
+			img := ebiten.NewImage(config.UNITE, config.UNITE)
+			img.Fill(b.Color)
+			block := BlockPool.Get().(*sprite.Block)
+			block.Name = b.Name
+			sprite := StaticSpritePool.Get().(*sprite.StaticSprite)
+			sprite.Image = img
+			block.Sprite = sprite
+			biome.BaseImage = block
+			templateGround.Biomes[v] = biome
 		}
+
 	}
 }
 
@@ -257,10 +300,7 @@ var TEMPLATE_GROUND_RESSOURCES Template_Ground = Template_Ground{
 			Name:               "obsidian",
 			Description:        "obsidian",
 			Color:              color.RGBA{R: 42, G: 35, B: 34, A: 255},
-			Animated:           true,
-			AnimationType:      "loop",
-			AnimationDuration:  0.5,
-			IterationNumber:    5,
+			Animated:           false,
 			StartX:             48,
 			State:              []string{"Burning"},
 			OrientationSprites: make(map[string]*sprite.Block), // Initialisation ici
@@ -282,4 +322,15 @@ var TEMPLATE_GROUND_RESSOURCES Template_Ground = Template_Ground{
 			Voisin:             "obsidian",
 		},
 	},
+}
+
+func (tg *Template_Ground) Update(fps float64) {
+	for v := range tg.Biomes {
+		for _, value := range tg.Biomes[v].OrientationSprites {
+			if value.Animated {
+				value.Sprite.Update(fps)
+			}
+		}
+
+	}
 }

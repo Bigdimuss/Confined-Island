@@ -38,12 +38,10 @@ func (s *Screen) GetGroundUnderPlayer() sprite.Block {
 
 }
 
-func (s *Screen) Update(targetX int, targetY int, moveSpeed float64) {
+func (s *Screen) Update(targetX int, targetY int, moveSpeed float64, fps float64) {
 	// Mettre à jour les coordonnées de la caméra
-	if s.player.Moving {
-		s.X = int(sprite.Lerp(float64(s.X), float64(targetX*32), moveSpeed))
-		s.Y = int(sprite.Lerp(float64(s.Y), float64(targetY*32), moveSpeed))
-	}
+	s.X = int(sprite.Lerp(float64(s.X), float64(targetX*32), moveSpeed))
+	s.Y = int(sprite.Lerp(float64(s.Y), float64(targetY*32), moveSpeed))
 
 	y_map, x_map := s.player.WorldY-s.Size_y/2, s.player.WorldX-s.Size_x/2
 
@@ -58,15 +56,13 @@ func (s *Screen) Update(targetX int, targetY int, moveSpeed float64) {
 				s.Background[yScreen][xScreen] = s.world.Background[mapY][mapX]
 
 			} else {
-				s.Background[yScreen][xScreen] = &sprite.Block{
-					Name: "limite",
-					Sprite: &sprite.StaticSprite{
-						Width:  float64(config.UNITE),
-						Height: float64(config.UNITE),
-					},
-					BaseColor: generator.TEMPLATE_GROUND_RESSOURCES.Biomes["limite"].Color,
-				}
+				s.Background[yScreen][xScreen] = generator.TEMPLATE_GROUND_RESSOURCES.Biomes["limite"].BaseImage
 			}
 		}
 	}
+
+}
+
+func (s *Screen) Remove(y int, x int) {
+	s.Background[y][x] = nil
 }

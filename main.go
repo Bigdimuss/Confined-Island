@@ -22,9 +22,11 @@ import (
 	"confinedisland/generator/island"
 	"confinedisland/player"
 	"confinedisland/screen"
+	"fmt"
 	"log"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/vector"
 	"image/color"
 )
@@ -62,8 +64,8 @@ func (g *Game) Draw_Cursor(screen *ebiten.Image) {
 func (g *Game) Update() error {
 	g.fps = ebiten.ActualFPS()
 	g.tps = ebiten.ActualTPS()
-	log.Printf("FPS : %v\n", g.fps)
-	log.Printf("TPS : %v\n", g.tps)
+	generator.TEMPLATE_GROUND_RESSOURCES.Update(g.fps)
+
 	g.mouseCoordX, g.mouseCoordY = ebiten.CursorPosition()
 	g.playerCenterX, g.playerCenterY = g.player.GetCenterCoord()
 
@@ -76,32 +78,29 @@ func (g *Game) Update() error {
 		g.player.Moving = true
 		g.player.ProcessMoveSpeed = 0
 	}
-	g.scene.Update(g.player.MoveTargetX, g.player.MoveTargetY, g.player.MoveSpeed)
-
+	g.scene.Update(g.player.MoveTargetX, g.player.MoveTargetY, g.player.MoveSpeed, g.fps)
 	return nil
 }
 
 func (g *Game) handleInput() bool {
+	moveX, moveY := 0, 0
 
-	up := ebiten.IsKeyPressed(ebiten.KeyUp)
-	down := ebiten.IsKeyPressed(ebiten.KeyDown)
-	left := ebiten.IsKeyPressed(ebiten.KeyLeft)
-	right := ebiten.IsKeyPressed(ebiten.KeyRight)
+	if ebiten.IsKeyPressed(ebiten.KeyUp) {
+		moveY = -1
+	}
+	if ebiten.IsKeyPressed(ebiten.KeyDown) {
+		moveY = 1
+	}
+	if ebiten.IsKeyPressed(ebiten.KeyLeft) {
+		moveX = -1
+	}
+	if ebiten.IsKeyPressed(ebiten.KeyRight) {
+		moveX = 1
+	}
 
-	if (up || down || left || right) && !g.player.Moving {
-		// Calculer les nouvelles coordonnées cibles
-		if up {
-			g.player.MoveTargetY = g.player.WorldY - 1
-		} else if down {
-			g.player.MoveTargetY = g.player.WorldY + 1
-		}
-		if left {
-			g.player.MoveTargetX = g.player.WorldX - 1
-		} else if right {
-			g.player.MoveTargetX = g.player.WorldX + 1
-		}
-
-		// Vérifier les limites du monde
+	if moveX != 0 || moveY != 0 {
+		g.player.MoveTargetX = g.player.WorldX + int(moveX)
+		g.player.MoveTargetY = g.player.WorldY + int(moveY)
 		g.clampPlayerPosition()
 		return true
 	}
@@ -123,15 +122,14 @@ func (g *Game) clampPlayerPosition() {
 	}
 }
 
-func (g *Game) drawVisibleBlocks(screen *ebiten.Image) {
-	op := &ebiten.DrawImageOptions{}
+func (g *Game) drawVisibleBlocks(screen *ebiten.Image, op *ebiten.DrawImageOptions) {
 	maxY, maxX := g.scene.Size_y+4, g.scene.Size_x+4
 	for j := 0; j < maxY; j++ {
 		for i := 0; i < maxX; i++ {
 			if g.scene.Background[j][i] != nil {
 				op.GeoM.Reset()
 				op.GeoM.Translate(float64((i-2)*config.UNITE), float64((j-2)*config.UNITE))
-				g.scene.Background[j][i].Draw(screen, op)
+				screen.DrawImage(g.scene.Background[j][i].Image(), op)
 			}
 
 		}
@@ -140,27 +138,27 @@ func (g *Game) drawVisibleBlocks(screen *ebiten.Image) {
 
 }
 func (g *Game) Draw(screen *ebiten.Image) {
-
 	screen.Fill(color.RGBA{0, 0, 0, 255})
 	// Créer une image de 32x32 pour chaque sprite
-	g.drawVisibleBlocks(screen)
-	g.Draw_Cursor(screen)
 	op := &ebiten.DrawImageOptions{}
+	g.drawVisibleBlocks(screen, op)
 	op.GeoM.Reset()
 	op.GeoM.Translate(g.player.X, g.player.Y)
+	//screen.DrawImage(screen, nil)
+	g.Draw_Cursor(screen)
 	screen.DrawImage(g.redSquareImage, op)
-	log.Printf("BIOME : %v\n", g.scene.GetGroundUnderPlayer().Name)
+	ebitenutil.DebugPrint(screen, fmt.Sprintf("FPS : %v \nTPS : %v \nBIOME : %v", g.fps, g.tps, g.scene.GetGroundUnderPlayer().Name))
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
-	return 960, 544 // Taille de la fenêtre
+	return 1920, 1080 //960, 544 // Taille de la fenêtre
 }
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
 	islandConf := island.IslandConfig{Width: 1500, Height: 1500}
-	width, height := 960, 544
+	width, height := 1920, 1080 //960, 544
 
 	generator.TEMPLATE_GROUND_RESSOURCES.GenerateOrientation(generator.TemplateGroundPosition)
 
@@ -171,7 +169,7 @@ func main() {
 		Y:           float64(height)/2 - float64(config.UNITE/2),
 		WorldX:      int(islandConf.Width) / 2,
 		WorldY:      int(islandConf.Height) / 2,
-		MoveSpeed:   0.2,
+		MoveSpeed:   0.25,
 		MoveTargetX: int(islandConf.Width) / 2,
 		MoveTargetY: int(islandConf.Height) / 2,
 		Moving:      true,
@@ -184,10 +182,10 @@ func main() {
 	ebiten.SetWindowTitle("ConfinedIsland")
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
 	//ebiten.SetScreenClearedEveryFrame(true)
-	ebiten.SetVsyncEnabled(true)
+	//ebiten.SetVsyncEnabled(true)
 	ebiten.SetTPS(config.TICKS)
 
-	if err := ebiten.RunGame(g); err != nil {
+	if err := ebiten.RunGameWithOptions(g, &ebiten.RunGameOptions{GraphicsLibrary: ebiten.GraphicsLibraryAuto}); err != nil {
 		log.Fatal(err)
 
 	}

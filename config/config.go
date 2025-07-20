@@ -1,6 +1,6 @@
 package config
 
-var TICKS int = 60
+var TICKS int = 120
 
 var UNITE int = 32
 

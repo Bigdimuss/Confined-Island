@@ -9,6 +9,8 @@ import (
 
 type Sprite interface {
 	Draw(*ebiten.Image, *ebiten.DrawImageOptions)
+	GetImage() *ebiten.Image
+	Update(fps float64)
 }
 
 type Block struct {
@@ -18,6 +20,7 @@ type Block struct {
 	BaseColor    color.RGBA
 	X            int
 	Y            int
+	Animated     bool
 	doDamage     bool
 	damageValue  int64
 	damageSpeed  float64
@@ -25,6 +28,9 @@ type Block struct {
 
 }
 
+func UpdateCursorAnimation(fps float64, animation *AnimatedSprites) {
+	animation.Update(fps)
+}
 func (b *Block) Draw(screen *ebiten.Image, op *ebiten.DrawImageOptions) {
 
 	if b.Sprite != nil {
@@ -35,6 +41,16 @@ func (b *Block) Draw(screen *ebiten.Image, op *ebiten.DrawImageOptions) {
 		screen.DrawImage(i, op)
 	}
 
+}
+
+func (b *Block) Image() *ebiten.Image {
+	if b.Sprite != nil {
+		return b.Sprite.GetImage()
+	} else {
+		i := ebiten.NewImage(config.UNITE, config.UNITE)
+		i.Fill(b.BaseColor)
+		return i
+	}
 }
 func (b *Block) SetDamageValue(damage int64) {
 	b.damageValue = damage
@@ -62,34 +78,6 @@ func (b *Block) RemoveElementState(state string) {
 	b.elementState = newlist
 }
 
-/*
-func newBlocksList(path string, startX int64, nbinteration int) map[string]Block {
-	var blocks map[string]Block
-	img, _, err := ebitenutil.NewImageFromFile(path)
-	images := AnimatedSprites{}
-	for i := 0; i < nbinteration; i++ {
-
-	}
-	return blocks
-}
-*/
-/*
-	    img, err := ebitenutil.NewImageFromFile(path)
-	    if err != nil {
-	        return nil, err
-	    }
-
-	    var sprites []*ebiten.Image
-	    for y := 0; y < img.Bounds().Dy(); y += spriteHeight {
-	        for x := 0; x < img.Bounds().Dx(); x += spriteWidth {
-	            rect := image.Rect(x, y, x+spriteWidth, y+spriteHeight)
-	            sprite := img.SubImage(rect).(*ebiten.Image)
-	            sprites = append(sprites, sprite)
-	        }
-	    }
-	    return sprites, nil
-	}
-*/
 func Lerp(start, end float64, t float64) float64 {
 	return start + (end-start)*t
 }
@@ -105,14 +93,26 @@ func (sp *StaticSprite) Draw(screen *ebiten.Image, op *ebiten.DrawImageOptions) 
 	}
 }
 
-type AnimatedSprites struct {
-	Sprites  []*StaticSprite
-	Duration float64
-	Type     string
-	isRun    bool
-	cursor   int
+func (sp *StaticSprite) Update(fps float64) {
 }
 
+func (sp *StaticSprite) GetImage() *ebiten.Image {
+	return sp.Image
+}
+
+type AnimatedSprites struct {
+	Sprites     []*StaticSprite
+	Duration    float64
+	Type        string
+	isRun       bool
+	cursor      int
+	id          int
+	timeElapsed float64
+}
+
+func (a *AnimatedSprites) SetCursor(cursor int) {
+	a.cursor = cursor
+}
 func (a *AnimatedSprites) GetRunState() bool {
 	return a.isRun
 }
@@ -133,6 +133,43 @@ func (a *AnimatedSprites) Draw(screen *ebiten.Image, op *ebiten.DrawImageOptions
 
 }
 
+func (a *AnimatedSprites) Update(tps float64) {
+	if !a.isRun || len(a.Sprites) == 0 {
+		return
+	}
+
+	// Calculer l'intervalle pour changer d'image basé sur la durée totale
+	interval := a.Duration / float64(len(a.Sprites)) // Durée par image
+
+	// Incrémenter le temps écoulé
+	a.timeElapsed += 1.0 / tps // Simule le temps écoulé
+
+	// Vérifier si le temps écoulé dépasse l'intervalle
+	if a.timeElapsed >= interval {
+		a.timeElapsed = 0 // Réinitialiser le temps écoulé
+
+		// Logique pour changer d'image selon le type d'animation
+		if a.Type == "loop" {
+			a.cursor++
+			if a.cursor >= len(a.Sprites) {
+				a.cursor = 0 // Recommencer l'animation
+			}
+		} else if a.Type == "ping-pong" {
+			if a.cursor == len(a.Sprites)-1 {
+				a.id = -1 // Inverser la direction
+			} else if a.cursor == 0 {
+				a.id = 1 // Inverser la direction
+			}
+
+			// Mise à jour du curseur
+			a.cursor += a.id
+		}
+	}
+}
+
+func (a *AnimatedSprites) GetImage() *ebiten.Image {
+	return a.Sprites[a.cursor].Image
+}
 func NewAnimation(sprites []*StaticSprite, duration float64, isrun bool) *AnimatedSprites {
 	a := AnimatedSprites{Sprites: sprites, Duration: duration, isRun: isrun}
 	return &a

@@ -16,7 +16,7 @@ type Player struct {
 }
 
 func NewPlayer(name string) *Player {
-	p := &Player{Name: name}
+	p := &Player{Name: name, Moving: true}
 	return p
 }
 
